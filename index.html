@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
 <title>CIT Score Leaderboard</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
@@ -98,7 +97,7 @@
 </div>
 
 <script>
-const API_URL='https://script.google.com/macros/s/AKfycbxO2B5SOWfN5NPmpJMYpWzo1msJ-SxoTEH7Wwpf-3_eynqgPeGhSjCXNgmWlzc-ceU/exec';
+const API_URL='https://script.google.com/macros/s/YOUR_DEPLOY_ID/exec';
 const TEAMS=['Spades','Clubs','Hearts','Diamonds'];
 const KEY_UI_DATA='cit_ui_data',KEY_IS_EDITOR='cit_isEditor',KEY_EDITOR_NAME='cit_editorName';
 let currentTeam=TEAMS[0],uiData={},isEditor=localStorage.getItem(KEY_IS_EDITOR)==='true';
@@ -118,7 +117,8 @@ function setSyncStatus(t,c='secondary'){
   lastUpdatedEl.textContent='Last updated: '+new Date().toLocaleTimeString();
 }
 
-async function loadData() {
+// ----- Fetch Data -----
+async function loadData(){
   setSyncStatus('loading','warning');
   try {
     const res = await fetch(`${API_URL}?action=getData&_=${Date.now()}`);
@@ -129,8 +129,8 @@ async function loadData() {
       localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
       setSyncStatus('synced','success');
     } else {
+      console.error('Server error', json);
       setSyncStatus('data-error','danger');
-      console.error(json);
     }
   } catch(err){
     console.error('Load failed', err);
@@ -140,8 +140,8 @@ async function loadData() {
   }
 }
 
-
-async function saveData() {
+// ----- Save Data -----
+async function saveData(){
   const now = new Date().toISOString();
   const name = localStorage.getItem(KEY_EDITOR_NAME) || 'Unknown';
   uiData._lastEdit = { name, time: now };
@@ -150,32 +150,22 @@ async function saveData() {
 
   try {
     const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action:'saveData', data: uiData, editor: name })
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ action:'saveData', data:uiData, editor:name })
     });
     if(!res.ok) throw new Error('Network response not OK');
     const json = await res.json();
-    if(json.ok){
-      setSyncStatus('saved','success');
-      await loadData();
-    } else {
-      setSyncStatus('save-failed','danger');
-      console.error(json);
-    }
+    if(json.ok){ setSyncStatus('saved','success'); await loadData(); }
+    else{ setSyncStatus('save-failed','danger'); console.error(json); }
   } catch(err){
     console.error('Save failed', err);
     setSyncStatus('save-error','danger');
   }
 }
 
-
-
-function minutesAgo(t){
-  if(!t)return Infinity;
-  const diff=(Date.now()-new Date(t).getTime())/60000;
-  return diff;
-}
+// ----- Render Functions -----
+function minutesAgo(t){ return t ? (Date.now()-new Date(t).getTime())/60000 : Infinity; }
 
 function renderLeaderboard(){
   leaderboardBars.innerHTML='';
@@ -188,17 +178,15 @@ function renderLeaderboard(){
     const color=v>=0?'success':'danger';
     const div=document.createElement('div');
     div.className='mb-2';
-    div.innerHTML=`
-      <div class="d-flex justify-content-between"><div class="bar-label">${t}</div><div class="fw-bold">${v}</div></div>
+    div.innerHTML=`<div class="d-flex justify-content-between"><div class="bar-label">${t}</div><div class="fw-bold">${v}</div></div>
       <div class="progress" style="height:18px;"><div class="progress-bar bg-${color}" style="width:${pct}%">${pct}%</div></div>`;
     const le=document.createElement('div');
     le.className='last-editor';
     if(uiData._lastEdit){
       const mins=minutesAgo(uiData._lastEdit.time);
       le.classList.add(mins<=10?'recent':'old');
-      const local=new Date(uiData._lastEdit.time).toLocaleString();
-      le.textContent=`Last edited by ${uiData._lastEdit.name} at ${local}`;
-    }else le.textContent='No edits yet';
+      le.textContent=`Last edited by ${uiData._lastEdit.name} at ${new Date(uiData._lastEdit.time).toLocaleString()}`;
+    } else le.textContent='No edits yet';
     div.appendChild(le);
     leaderboardBars.appendChild(div);
   });
@@ -223,16 +211,13 @@ function renderTeamArea(){
   recordsBody.innerHTML='';
   logs.slice().reverse().forEach((l,i)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${l.timestamp}</td><td>${l.category}</td><td>${l.description}</td><td class="text-end">${l.points}</td><td>${isEditor?`<button class="btn btn-sm btn-outline-danger" data-i="${i}">Delete</button>`:''}</td>`;
+    tr.innerHTML=`<td>${l.timestamp}</td><td>${l.category}</td><td>${l.description}</td><td class="text-end">${l.points}</td>
+      <td>${isEditor?`<button class="btn btn-sm btn-outline-danger" data-i="${i}">Delete</button>`:''}</td>`;
     recordsBody.appendChild(tr);
   });
   if(isEditor){
-    recordsBody.querySelectorAll('button').forEach(b=>b.onclick=()=>{
-      const idx=b.dataset.i;
-      if(confirm('Delete this record?')){
-        uiData[currentTeam].splice(logs.length-1-idx,1);
-        saveData();renderAll();
-      }
+    recordsBody.querySelectorAll('button').forEach(b=>{
+      b.onclick=()=>{ const idx=b.dataset.i; if(confirm('Delete this record?')){ uiData[currentTeam].splice(logs.length-1-idx,1); saveData(); renderAll(); } };
     });
   }
 }
@@ -246,57 +231,49 @@ function renderAudit(){
   }));
 }
 
-function renderAll(){renderTeamList();renderLeaderboard();renderTeamArea();renderAudit();}
+function renderAll(){ renderTeamList(); renderLeaderboard(); renderTeamArea(); renderAudit(); }
 
-document.getElementById('addRecordForm').addEventListener('submit',e=>{
+// ----- Event Listeners -----
+document.getElementById('addRecordForm').addEventListener('submit', e=>{
   e.preventDefault();
-  if(!isEditor)return alert('Enter passcode to edit.');
-  const c=recordCategory.value,d=recordDesc.value.trim(),p=+recordPoints.value;
-  if(!d||isNaN(p))return alert('Fill all fields.');
-  const entry={category:c,description:d,points:p,timestamp:new Date().toLocaleString(),editor:localStorage.getItem(KEY_EDITOR_NAME)||'Editor'};
-  if(!uiData[currentTeam])uiData[currentTeam]=[];
+  if(!isEditor) return alert('Enter passcode to edit.');
+  const c=recordCategory.value, d=recordDesc.value.trim(), p=+recordPoints.value;
+  if(!d||isNaN(p)) return alert('Fill all fields.');
+  const entry={ category:c, description:d, points:p, timestamp:new Date().toLocaleString(), editor:localStorage.getItem(KEY_EDITOR_NAME)||'Editor' };
+  if(!uiData[currentTeam]) uiData[currentTeam]=[];
   uiData[currentTeam].push(entry);
-  saveData();renderAll();e.target.reset();
+  saveData(); renderAll(); e.target.reset();
 });
 
-btnUnlock.onclick=()=>{passInput.value='';passMsg.textContent='';passModal.show();};
-btnLogout.onclick=()=>{isEditor=false;localStorage.removeItem(KEY_IS_EDITOR);updateEditorUI();};
+btnUnlock.onclick=()=>{ passInput.value=''; passMsg.textContent=''; passModal.show(); };
+btnLogout.onclick=()=>{ isEditor=false; localStorage.removeItem(KEY_IS_EDITOR); updateEditorUI(); };
 
 passForm.onsubmit=async e=>{
   e.preventDefault();
   const pass=passInput.value.trim();
-  if(!pass)return passMsg.textContent='Enter passcode';
+  if(!pass) return passMsg.textContent='Enter passcode';
   try{
-    const r=await fetch(API_URL,{method:'POST',mode:'cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'checkPass',pass})});
-    const j=await r.json();
-    if(j&&j.ok){
-      let n=localStorage.getItem(KEY_EDITOR_NAME)||prompt('Editor name:','');
-      if(n)localStorage.setItem(KEY_EDITOR_NAME,n);
-      isEditor=true;localStorage.setItem(KEY_IS_EDITOR,'true');
-      passModal.hide();updateEditorUI();
-    }else passMsg.textContent='Incorrect passcode.';
-  }catch(err){passMsg.textContent='Connection failed: '+err.message;}
+    const res = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action:'checkPass', pass }) });
+    const j = await res.json();
+    if(j.ok){
+      let n = localStorage.getItem(KEY_EDITOR_NAME)||prompt('Editor name:','');
+      if(n) localStorage.setItem(KEY_EDITOR_NAME,n);
+      isEditor=true; localStorage.setItem(KEY_IS_EDITOR,'true'); passModal.hide(); updateEditorUI();
+    } else passMsg.textContent='Incorrect passcode.';
+  } catch(err){ passMsg.textContent='Connection failed: '+err.message; }
 };
 
 function updateEditorUI(){
   const f=addRecordForm;
-  if(isEditor){btnUnlock.classList.add('d-none');btnLogout.classList.remove('d-none');f.querySelectorAll('input,select,button').forEach(e=>e.disabled=false);}
-  else{btnUnlock.classList.remove('d-none');btnLogout.classList.add('d-none');f.querySelectorAll('input,select,button').forEach(e=>e.disabled=true);}
+  if(isEditor){ btnUnlock.classList.add('d-none'); btnLogout.classList.remove('d-none'); f.querySelectorAll('input,select,button').forEach(e=>e.disabled=false); }
+  else{ btnUnlock.classList.remove('d-none'); btnLogout.classList.add('d-none'); f.querySelectorAll('input,select,button').forEach(e=>e.disabled=true); }
 }
 
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded', ()=>{
   updateEditorUI();
   loadData();
-  if(!isEditor)setInterval(loadData,30000);
+  if(!isEditor) setInterval(loadData,30000);
 });
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
