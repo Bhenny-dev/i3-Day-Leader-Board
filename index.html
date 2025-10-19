@@ -148,17 +148,11 @@ async function saveData(){
   setSyncStatus('saving','info');
 
   try {
-    const payload = new URLSearchParams({
-      action: 'saveData',
-      data: JSON.stringify(uiData),
-      editor: name
-    });
-
     const res = await fetch(API_URL, {
       method: 'POST',
       mode: 'cors',
-      headers: {'Content-Type':'application/x-www-form-urlencoded'},
-      body: payload
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'saveData', data: uiData, editor: name })
     });
 
     if(!res.ok) throw new Error('Network response not OK');
@@ -175,7 +169,6 @@ async function saveData(){
     setSyncStatus('save-error','danger');
   }
 }
-
 
 
 function minutesAgo(t){
@@ -299,6 +292,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 </body>
 </html>
+
 
 
 
