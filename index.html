@@ -172,13 +172,23 @@ async function saveData() {
 }
 
 // Check passcode
+// Check passcode via GET
 async function checkPass(pass) {
+  pass = pass.trim(); // remove extra spaces
+  if (!pass) return false;
+
   try {
-    const res = await fetch(`${API_URL}?action=checkpass&pass=${encodeURIComponent(pass)}`);
+    const url = `${API_URL}?action=checkpass&pass=${encodeURIComponent(pass)}`;
+    const res = await fetch(url, { cache: "no-store" }); // prevent caching issues
     const json = await res.json();
-    return json.ok;
-  } catch(err){ return false; }
+    // Ensure strict string comparison
+    return json.ok === true;
+  } catch(err){
+    console.error('Password check failed:', err);
+    return false;
+  }
 }
+
 
 // --- Rendering Functions ---
 function minutesAgo(t){ if(!t) return Infinity; return (Date.now()-new Date(t).getTime())/60000; }
@@ -310,5 +320,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(!isEditor) setInterval(loadData,30000);
 });
 </script>
+  <script src="animation.js"></script>
 </body>
 </html>
+
