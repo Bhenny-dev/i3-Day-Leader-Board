@@ -133,18 +133,19 @@ function setSyncStatus(text, color='secondary') {
 async function loadData() {
   setSyncStatus('loading','warning');
   try {
-    const res = await fetch(`${API_URL}?action=getData`);
+    // GET request to Apps Script
+    const res = await fetch(`${API_URL}?action=getdata`);
     const json = await res.json();
-    if(json.ok) {
+    if (json.ok) {
       uiData = json.data || { Spades: [], Clubs: [], Hearts: [], Diamonds: [], _lastEdit: null };
-      TEAMS.forEach(t => { if(!uiData[t]) uiData[t] = [] });
+      TEAMS.forEach(t => { if (!uiData[t]) uiData[t] = [] });
       localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
       setSyncStatus('synced','success');
     } else {
       console.error(json);
       setSyncStatus('load-error','danger');
     }
-  } catch(err) {
+  } catch (err) {
     console.error(err);
     setSyncStatus('load-error','danger');
   }
@@ -160,22 +161,41 @@ async function saveData() {
   setSyncStatus('saving','info');
 
   try {
+    // POST using form-urlencoded (avoids CORS preflight)
+    const body = new URLSearchParams();
+    body.append('action', 'savedata');
+    body.append('editor', name);
+    body.append('data', JSON.stringify(uiData));
+
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action:'saveData', editor:name, data:uiData })
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
     });
+
     const json = await res.json();
-    if(json.ok) {
+    if (json.ok) {
       setSyncStatus('saved','success');
-      loadData();
+      loadData(); // reload from server
     } else {
       console.error(json);
       setSyncStatus('save-error','danger');
     }
-  } catch(err) {
+  } catch (err) {
     console.error(err);
     setSyncStatus('save-error','danger');
+  }
+}
+
+// ----------------- Check Passcode -----------------
+async function checkPasscode(pass) {
+  try {
+    const res = await fetch(`${API_URL}?action=checkpass&pass=${encodeURIComponent(pass)}`);
+    const json = await res.json();
+    return json.ok;
+  } catch (err) {
+    console.error(err);
+    return false;
   }
 }
 
@@ -306,4 +326,5 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 </body>
 </html>
+
 
