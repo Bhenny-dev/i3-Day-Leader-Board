@@ -164,27 +164,22 @@ function saveData() {
   setSyncStatus('saving','info');
 
   const script = document.createElement('script');
-  const payload = encodeURIComponent(JSON.stringify(uiData));
-  const cbName = 'saveCallback_' + Date.now();
-  window[cbName] = function(res){
-    delete window[cbName];
-    document.body.removeChild(script);
-    if(res.ok){
-      setSyncStatus('saved','success');
-      loadData();
-    } else {
-      console.error('Save failed', res);
-      setSyncStatus('save-error','danger');
-    }
-  };
-  script.src = `${API_URL}?action=saveData&data=${payload}&editor=${encodeURIComponent(name)}&callback=${cbName}`;
-  script.onerror = ()=>{
-    delete window[cbName];
-    document.body.removeChild(script);
-    console.error('JSONP request failed');
-    setSyncStatus('save-error','danger');
-  };
-  document.body.appendChild(script);
+const payload = encodeURIComponent(JSON.stringify(uiData));
+const cbName = 'saveCallback_' + Date.now();
+window[cbName] = function(res) {
+  delete window[cbName];
+  document.body.removeChild(script);
+  if(res.ok){ setSyncStatus('saved','success'); loadData(); }
+  else { setSyncStatus('save-error','danger'); console.error(res); }
+};
+script.src = `${API_URL}?action=saveData&data=${payload}&editor=${encodeURIComponent(name)}&callback=${cbName}`;
+script.onerror = () => {
+  delete window[cbName];
+  document.body.removeChild(script);
+  console.error('JSONP request failed');
+  setSyncStatus('save-error','danger');
+};
+document.body.appendChild(script);
 }
 
 
@@ -312,6 +307,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 </body>
 </html>
+
 
 
 
