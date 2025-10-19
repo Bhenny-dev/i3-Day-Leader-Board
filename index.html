@@ -103,7 +103,7 @@
 </div>
 
 <script>
-const API_URL = 'https://script.google.com/macros/s/AKfycbxO2B5SOWfN5NPmpJMYpWzo1msJ-SxoTEH7Wwpf-3_eynqgPeGhSjCXNgmWlzc-ceU/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwKq-mhrn4ZUXojlHdNjdLaXufigiy_DxBEfRZFbRcHvm8v-L3mnJ5omZ2eQKKwE4J6/exec';
 const TEAMS = ['Spades','Clubs','Hearts','Diamonds'];
 const KEY_UI_DATA = 'cit_ui_data', KEY_IS_EDITOR = 'cit_isEditor', KEY_EDITOR_NAME = 'cit_editorName';
 let currentTeam = TEAMS[0], uiData = {}, isEditor = localStorage.getItem(KEY_IS_EDITOR) === 'true';
@@ -174,20 +174,22 @@ async function saveData() {
 // Check passcode
 // Check passcode via GET
 async function checkPass(pass) {
-  pass = pass.trim(); // remove extra spaces
-  if (!pass) return false;
+  pass = pass.trim();
+  if(!pass) return false;
 
   try {
     const url = `${API_URL}?action=checkpass&pass=${encodeURIComponent(pass)}`;
-    const res = await fetch(url, { cache: "no-store" }); // prevent caching issues
+    const res = await fetch(url, { cache: "no-store", method:"GET" });
     const json = await res.json();
-    // Ensure strict string comparison
+    console.log('Pass check response:', json);
     return json.ok === true;
   } catch(err){
     console.error('Password check failed:', err);
     return false;
   }
 }
+
+
 
 
 // --- Rendering Functions ---
@@ -323,4 +325,5 @@ document.addEventListener('DOMContentLoaded', ()=>{
   <script src="animation.js"></script>
 </body>
 </html>
+
 
