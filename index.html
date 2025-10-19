@@ -97,11 +97,14 @@
 </div>
 
 <script>
-const API_URL='https://script.google.com/macros/s/AKfycbxO2B5SOWfN5NPmpJMYpWzo1msJ-SxoTEH7Wwpf-3_eynqgPeGhSjCXNgmWlzc-ceU/exec';
+/* ====== CONFIG ====== */
+// Replace with your proxy URL (Node.js proxy or Cloudflare Worker)
+const API_URL = 'https://your-deployed-proxy.example.com'; // <-- set this
 const TEAMS=['Spades','Clubs','Hearts','Diamonds'];
 const KEY_UI_DATA='cit_ui_data',KEY_IS_EDITOR='cit_isEditor',KEY_EDITOR_NAME='cit_editorName';
 let currentTeam=TEAMS[0],uiData={},isEditor=localStorage.getItem(KEY_IS_EDITOR)==='true';
 
+/* ====== UI refs ====== */
 const teamList=document.getElementById('teamList'),
       leaderboardBars=document.getElementById('leaderboardBars'),
       recordsBody=document.getElementById('recordsBody'),
@@ -124,25 +127,23 @@ function setSyncStatus(t,c='secondary'){
   lastUpdatedEl.textContent='Last updated: '+new Date().toLocaleTimeString();
 }
 
-// ----------------- Fetch Load -----------------
+/* ====== Load & Save via proxy ====== */
 async function loadData(){
   setSyncStatus('loading','warning');
   try{
     const res = await fetch(`${API_URL}?action=getData`);
-    const json = await res.json();
+    const text = await res.text();
+    const json = JSON.parse(text);
     if(json.ok){
       uiData = json.data || { Spades: [], Clubs: [], Hearts: [], Diamonds: [], _lastEdit: null };
       TEAMS.forEach(t=>{ if(!uiData[t]) uiData[t]=[] });
       localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
       setSyncStatus('synced','success');
     } else { console.error(json); setSyncStatus('load-error','danger'); }
-  } catch(err){
-    console.error(err); setSyncStatus('load-error','danger');
-  }
+  } catch(err){ console.error(err); setSyncStatus('load-error','danger'); }
   renderAll();
 }
 
-// ----------------- Fetch Save -----------------
 async function saveData(){
   const now = new Date().toISOString();
   const name = localStorage.getItem(KEY_EDITOR_NAME) || 'Unknown';
@@ -151,20 +152,19 @@ async function saveData(){
   setSyncStatus('saving','info');
 
   try{
-    const res = await fetch(API_URL,{
+    const res = await fetch(API_URL, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({ action:'saveData', editor:name, data:uiData })
     });
-    const json = await res.json();
-    if(json.ok){
-      setSyncStatus('saved','success');
-      loadData();
-    } else { console.error(json); setSyncStatus('save-error','danger'); }
+    const text = await res.text();
+    const json = JSON.parse(text);
+    if(json.ok){ setSyncStatus('saved','success'); loadData(); }
+    else { console.error(json); setSyncStatus('save-error','danger'); }
   } catch(err){ console.error(err); setSyncStatus('save-error','danger'); }
 }
 
-// ---------------- Rendering ----------------
+/* ====== Rendering ====== */
 function minutesAgo(t){ if(!t)return Infinity; return (Date.now()-new Date(t).getTime())/60000; }
 
 function renderLeaderboard(){
@@ -237,7 +237,7 @@ function renderAudit(){
 
 function renderAll(){renderTeamList();renderLeaderboard();renderTeamArea();renderAudit();}
 
-// ---------------- Event Listeners ----------------
+/* ====== Events ====== */
 document.getElementById('addRecordForm').addEventListener('submit',e=>{
   e.preventDefault();
   if(!isEditor)return alert('Enter passcode to edit.');
@@ -257,15 +257,15 @@ passForm.onsubmit=async e=>{
   const pass=passInput.value.trim();
   if(!pass)return passMsg.textContent='Enter passcode';
   try{
-    const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'checkPass',pass})});
-    const j=await r.json();
+    const r = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'checkPass', pass }) });
+    const text = await r.text(); const j = JSON.parse(text);
     if(j&&j.ok){
       let n=localStorage.getItem(KEY_EDITOR_NAME)||prompt('Editor name:','');
       if(n)localStorage.setItem(KEY_EDITOR_NAME,n);
       isEditor=true;localStorage.setItem(KEY_IS_EDITOR,'true');
       passModal.hide();updateEditorUI();
     } else passMsg.textContent='Incorrect passcode.';
-  } catch(err){passMsg.textContent='Connection failed: '+err.message;}
+  } catch(err){ passMsg.textContent='Connection failed: '+err.message; }
 };
 
 function updateEditorUI(){
