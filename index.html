@@ -84,12 +84,18 @@
 </div>
 
 <!-- Passcode Modal -->
-<div class="modal fade" id="passcodeModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="passcodeModal" tabindex="-1" aria-labelledby="passcodeModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-sm modal-dialog-centered">
     <div class="modal-content">
       <form id="passForm" class="p-3">
-        <div class="modal-header"><h5 class="modal-title">Enter Editor Passcode</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body"><input id="passInput" type="password" class="form-control" placeholder="Passcode"><div id="passMsg" class="small-muted mt-2"></div></div>
+        <div class="modal-header">
+          <h5 class="modal-title" id="passcodeModalLabel">Enter Editor Passcode</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input id="passInput" type="password" class="form-control" placeholder="Passcode" aria-describedby="passMsg">
+          <div id="passMsg" class="small-muted mt-2"></div>
+        </div>
         <div class="modal-footer"><button type="submit" class="btn btn-primary">Unlock</button></div>
       </form>
     </div>
@@ -111,7 +117,8 @@ const teamList = document.getElementById('teamList'),
       auditBody = document.getElementById('auditBody'),
       btnUnlock = document.getElementById('btnUnlock'),
       btnLogout = document.getElementById('btnLogout'),
-      passModal = new bootstrap.Modal(document.getElementById('passcodeModal')),
+      passModalEl = document.getElementById('passcodeModal'),
+      passModal = new bootstrap.Modal(passModalEl, { backdrop: 'static', keyboard: false }),
       passForm = document.getElementById('passForm'),
       passInput = document.getElementById('passInput'),
       passMsg = document.getElementById('passMsg'),
@@ -273,6 +280,18 @@ passForm.onsubmit = async e=>{
     passModal.hide(); updateEditorUI();
   } else passMsg.textContent='Incorrect passcode';
 };
+
+// Submit on Enter key
+passInput.addEventListener('keydown', e=>{
+  if(e.key==='Enter'){ e.preventDefault(); passForm.dispatchEvent(new Event('submit')); }
+});
+
+// Remove focus when modal closes to prevent aria-hidden warning
+passModalEl.addEventListener('hidden.bs.modal', ()=>{
+  document.activeElement.blur();
+  passInput.value='';
+  passMsg.textContent='';
+});
 
 function updateEditorUI(){
   const f=addRecordForm;
