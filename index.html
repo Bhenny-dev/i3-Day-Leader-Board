@@ -155,11 +155,11 @@ async function saveData() {
 
   try {
     const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'saveData', editor:name, data:uiData })
-    });
-    const json = await res.json();
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'saveData',editor:name,data:uiData})
+  });
+  const json = await res.json();
     if(json.ok){
       setSyncStatus('saved','success');
       loadData();
@@ -297,4 +297,5 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 </body>
 </html>
+
 
