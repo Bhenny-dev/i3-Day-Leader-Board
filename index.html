@@ -117,22 +117,38 @@ function setSyncStatus(t,c='secondary'){
   lastUpdatedEl.textContent='Last updated: '+new Date().toLocaleTimeString();
 }
 
-if ((params.action || '').toLowerCase() === 'getdata') {
-  const props = PropertiesService.getScriptProperties();
-  const raw = props.getProperty(PROP_KEY_UI) || '{}';
-  const ver = Number(props.getProperty(PROP_KEY_VERSION) || 0);
-  const data = safeParseJSON(raw, {});
-  data._version = ver;
+function loadData(){
+  setSyncStatus('loading','warning');
 
-  // JSONP Support
-  const callback = params.callback;
-  const response = JSON.stringify({ ok: true, data: data, version: ver });
-  const text = callback ? `${callback}(${response});` : response;
+  const callbackName = 'cb_' + Math.random().toString(36).substring(2);
+  window[callbackName] = function(response){
+    try{
+      if(response && response.ok){
+        uiData = response.data || {};
+        localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
+        setSyncStatus('synced','success');
+      } else {
+        setSyncStatus('data-error','danger');
+      }
+    }catch(e){
+      console.error('JSONP parse failed', e);
+      setSyncStatus('offline','danger');
+    }finally{
+      renderAll();
+      delete window[callbackName];
+      script.remove();
+    }
+  };
 
-  return ContentService.createTextOutput(text)
-    .setMimeType(callback ? ContentService.MimeType.JAVASCRIPT : ContentService.MimeType.JSON);
+  const script = document.createElement('script');
+  script.src = `${API_URL}?action=getData&callback=${callbackName}&_=${Date.now()}`;
+  script.onerror = ()=>{
+    console.error('JSONP request failed');
+    setSyncStatus('offline','danger');
+    renderAll();
+  };
+  document.body.appendChild(script);
 }
-
 
 async function saveData(){
   const now=new Date().toISOString();
@@ -271,4 +287,3 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 </body>
 </html>
-
