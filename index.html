@@ -150,21 +150,47 @@ function loadData(){
   document.body.appendChild(script);
 }
 
-async function saveData(){
-  const now=new Date().toISOString();
-  const name=localStorage.getItem(KEY_EDITOR_NAME)||'Unknown';
-  uiData._lastEdit={name,time:now};
-  localStorage.setItem(KEY_UI_DATA,JSON.stringify(uiData));
-  setSyncStatus('saving','info');
-  try{
-    const r=await fetch(API_URL,{
-      method:'POST',mode:'cors',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'saveData',data:uiData,editor:name})
-    });
-    const j=await r.json();
-    if(j&&j.ok){setSyncStatus('saved','success');await loadData();}
-  }catch(e){setSyncStatus('save-error','danger');}
+function saveData(){
+  const now = new Date().toISOString();
+  const name = localStorage.getItem(KEY_EDITOR_NAME) || 'Unknown';
+  uiData._lastEdit = { name, time: now };
+  localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
+  setSyncStatus('saving', 'info');
+
+  const callbackName = 'cb_save_' + Math.random().toString(36).substring(2);
+  window[callbackName] = function(response) {
+    try {
+      if (response && response.ok) {
+        setSyncStatus('saved', 'success');
+        loadData();
+      } else {
+        console.error('Save failed', response);
+        setSyncStatus('save-failed', 'danger');
+      }
+    } catch (e) {
+      console.error('Save parse error', e);
+      setSyncStatus('save-error', 'danger');
+    } finally {
+      delete window[callbackName];
+      script.remove();
+    }
+  };
+
+  const payload = encodeURIComponent(JSON.stringify({
+    action: 'saveData',
+    data: uiData,
+    editor: name
+  }));
+
+  const script = document.createElement('script');
+  script.src = `${API_URL}?callback=${callbackName}&payload=${payload}&_=${Date.now()}`;
+  script.onerror = () => {
+    setSyncStatus('save-error', 'danger');
+    console.error('Save JSONP request failed');
+  };
+  document.body.appendChild(script);
 }
+
 
 function minutesAgo(t){
   if(!t)return Infinity;
@@ -287,3 +313,4 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 </body>
 </html>
+
