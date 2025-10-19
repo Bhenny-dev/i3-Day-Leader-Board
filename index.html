@@ -128,22 +128,21 @@ function setSyncStatus(t,c='secondary'){
 async function loadData(){
   setSyncStatus('loading','warning');
   try{
-    const res = await fetch(API_URL);
+    const res = await fetch(`${API_URL}?action=getData`);
     const json = await res.json();
     if(json.ok){
-      uiData = json.data || {};
+      uiData = json.data || { Spades: [], Clubs: [], Hearts: [], Diamonds: [], _lastEdit: null };
+      TEAMS.forEach(t=>{ if(!uiData[t]) uiData[t]=[] });
       localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
       setSyncStatus('synced','success');
     } else { console.error(json); setSyncStatus('load-error','danger'); }
   } catch(err){
-    console.error(err);
-    setSyncStatus('load-error','danger');
+    console.error(err); setSyncStatus('load-error','danger');
   }
   renderAll();
 }
 
 // ----------------- Fetch Save -----------------
-// Save data
 async function saveData(){
   const now = new Date().toISOString();
   const name = localStorage.getItem(KEY_EDITOR_NAME) || 'Unknown';
@@ -160,17 +159,10 @@ async function saveData(){
     const json = await res.json();
     if(json.ok){
       setSyncStatus('saved','success');
-      loadData(); // reload after save
-    } else {
-      console.error(json);
-      setSyncStatus('save-error','danger');
-    }
-  } catch(err){
-    console.error(err);
-    setSyncStatus('save-error','danger');
-  }
+      loadData();
+    } else { console.error(json); setSyncStatus('save-error','danger'); }
+  } catch(err){ console.error(err); setSyncStatus('save-error','danger'); }
 }
-
 
 // ---------------- Rendering ----------------
 function minutesAgo(t){ if(!t)return Infinity; return (Date.now()-new Date(t).getTime())/60000; }
@@ -184,13 +176,10 @@ function renderLeaderboard(){
     const v=totals[t]||0;
     const pct=Math.round(Math.abs(v)/max*100);
     const color=v>=0?'success':'danger';
-    const div=document.createElement('div');
-    div.className='mb-2';
-    div.innerHTML=`
-      <div class="d-flex justify-content-between"><div class="bar-label">${t}</div><div class="fw-bold">${v}</div></div>
+    const div=document.createElement('div'); div.className='mb-2';
+    div.innerHTML=`<div class="d-flex justify-content-between"><div class="bar-label">${t}</div><div class="fw-bold">${v}</div></div>
       <div class="progress" style="height:18px;"><div class="progress-bar bg-${color}" style="width:${pct}%">${pct}%</div></div>`;
-    const le=document.createElement('div');
-    le.className='last-editor';
+    const le=document.createElement('div'); le.className='last-editor';
     if(uiData._lastEdit){
       const mins=minutesAgo(uiData._lastEdit.time);
       le.classList.add(mins<=10?'recent':'old');
@@ -220,15 +209,18 @@ function renderTeamArea(){
   recordsBody.innerHTML='';
   logs.slice().reverse().forEach((l,i)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${l.timestamp}</td><td>${l.category}</td><td>${l.description}</td><td class="text-end">${l.points}</td><td>${isEditor?`<button class="btn btn-sm btn-outline-danger" data-i="${i}">Delete</button>`:''}</td>`;
+    tr.innerHTML=`<td>${l.timestamp}</td><td>${l.category}</td><td>${l.description}</td><td class="text-end">${l.points}</td>
+    <td>${isEditor?`<button class="btn btn-sm btn-outline-danger" data-i="${i}">Delete</button>`:''}</td>`;
     recordsBody.appendChild(tr);
   });
   if(isEditor){
-    recordsBody.querySelectorAll('button').forEach(b=>b.onclick=()=>{
-      const idx=b.dataset.i;
-      if(confirm('Delete this record?')){
-        uiData[currentTeam].splice(logs.length-1-idx,1);
-        saveData();renderAll();
+    recordsBody.querySelectorAll('button').forEach(b=>{
+      b.onclick=()=>{
+        const idx=b.dataset.i;
+        if(confirm('Delete this record?')){
+          uiData[currentTeam].splice(logs.length-1-idx,1);
+          saveData(); renderAll();
+        }
       }
     });
   }
@@ -292,10 +284,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   loadData();
   if(!isEditor)setInterval(loadData,30000);
 });
-
 </script>
 </body>
 </html>
-
-
-
