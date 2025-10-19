@@ -124,69 +124,69 @@ function setSyncStatus(t,c='secondary'){
   lastUpdatedEl.textContent='Last updated: '+new Date().toLocaleTimeString();
 }
 
-// ---------------- Load Data ----------------
-async function loadData(){
+// ----------------- JSONP Load -----------------
+function loadData() {
   setSyncStatus('loading','warning');
-  try {
-    const res = await fetch(`${API_URL}?action=getData&_=${Date.now()}`);
-    if(!res.ok) throw new Error('Network response not OK');
-    const json = await res.json();
-    if(json.ok){
-      uiData = json.data || {};
+
+  const cbName = 'loadCallback_' + Date.now();
+  window[cbName] = function(res) {
+    delete window[cbName];
+    document.body.removeChild(script);
+    if(res.ok){
+      uiData = res.data || {};
       localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
       setSyncStatus('synced','success');
     } else {
-      console.error('Server returned error', json);
-      setSyncStatus('data-error','danger');
+      console.error('Load failed', res);
+      setSyncStatus('load-error','danger');
     }
-  } catch(err){
-    console.error('Load failed', err);
-    setSyncStatus('offline','danger');
-  } finally {
     renderAll();
-  }
+  };
+
+  const script = document.createElement('script');
+  script.src = `${API_URL}?action=getData&callback=${cbName}&_=${Date.now()}`;
+  script.onerror = ()=>{
+    delete window[cbName];
+    document.body.removeChild(script);
+    console.error('JSONP request failed');
+    setSyncStatus('load-error','danger');
+    renderAll();
+  };
+  document.body.appendChild(script);
 }
 
-// ---------------- Save Data (JSONP) ----------------
-async function saveData() {
+// ----------------- JSONP Save -----------------
+function saveData() {
   const now = new Date().toISOString();
   const name = localStorage.getItem(KEY_EDITOR_NAME) || 'Unknown';
   uiData._lastEdit = { name, time: now };
   localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
-  setSyncStatus('saving', 'info');
+  setSyncStatus('saving','info');
 
-  try {
-    const payload = encodeURIComponent(JSON.stringify(uiData));
-    const callbackName = 'jsonpSaveCallback_' + Date.now();
-
-    const result = await new Promise((resolve, reject) => {
-      window[callbackName] = (res) => {
-        delete window[callbackName];
-        resolve(res);
-      };
-
-      const script = document.createElement('script');
-      script.src = `${API_URL}?action=saveData&data=${payload}&editor=${encodeURIComponent(name)}&callback=${callbackName}&_=${Date.now()}`;
-      script.onerror = () => {
-        delete window[callbackName];
-        reject(new Error('JSONP request failed'));
-      };
-      document.body.appendChild(script);
-    });
-
-    if (result.ok) {
-      setSyncStatus('saved', 'success');
-      await loadData();
+  const script = document.createElement('script');
+  const payload = encodeURIComponent(JSON.stringify(uiData));
+  const cbName = 'saveCallback_' + Date.now();
+  window[cbName] = function(res){
+    delete window[cbName];
+    document.body.removeChild(script);
+    if(res.ok){
+      setSyncStatus('saved','success');
+      loadData();
     } else {
-      console.error('Save failed', result);
-      setSyncStatus('save-failed', 'danger');
+      console.error('Save failed', res);
+      setSyncStatus('save-error','danger');
     }
-
-  } catch (err) {
-    console.error('Save failed', err);
-    setSyncStatus('save-error', 'danger');
-  }
+  };
+  script.src = `${API_URL}?action=saveData&data=${payload}&editor=${encodeURIComponent(name)}&callback=${cbName}`;
+  script.onerror = ()=>{
+    delete window[cbName];
+    document.body.removeChild(script);
+    console.error('JSONP request failed');
+    setSyncStatus('save-error','danger');
+  };
+  document.body.appendChild(script);
 }
+
 
 // ---------------- Rendering ----------------
 function minutesAgo(t){ if(!t)return Infinity; return (Date.now()-new Date(t).getTime())/60000; }
@@ -312,5 +312,6 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 </body>
 </html>
+
 
 
