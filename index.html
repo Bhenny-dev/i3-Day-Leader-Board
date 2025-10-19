@@ -118,79 +118,64 @@ function setSyncStatus(t,c='secondary'){
   lastUpdatedEl.textContent='Last updated: '+new Date().toLocaleTimeString();
 }
 
-function loadData(){
+async function loadData(){
   setSyncStatus('loading','warning');
-
-  const callbackName = 'cb_' + Math.random().toString(36).substring(2);
-  window[callbackName] = function(response){
-    try{
-      if(response && response.ok){
-        uiData = response.data || {};
-        localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
-        setSyncStatus('synced','success');
-      } else {
-        setSyncStatus('data-error','danger');
-      }
-    }catch(e){
-      console.error('JSONP parse failed', e);
-      setSyncStatus('offline','danger');
-    }finally{
-      renderAll();
-      delete window[callbackName];
-      script.remove();
+  try {
+    const res = await fetch(`${API_URL}?action=getData&_=${Date.now()}`);
+    if(!res.ok) throw new Error('Network response not OK');
+    const json = await res.json();
+    if(json.ok){
+      uiData = json.data || {};
+      localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
+      setSyncStatus('synced','success');
+    } else {
+      console.error('Server returned error', json);
+      setSyncStatus('data-error','danger');
     }
-  };
-
-  const script = document.createElement('script');
-  script.src = `${API_URL}?action=getData&callback=${callbackName}&_=${Date.now()}`;
-  script.onerror = ()=>{
-    console.error('JSONP request failed');
+  } catch(err){
+    console.error('Load failed', err);
     setSyncStatus('offline','danger');
+  } finally {
     renderAll();
-  };
-  document.body.appendChild(script);
+  }
 }
 
-function saveData(){
+async function saveData(){
   const now = new Date().toISOString();
   const name = localStorage.getItem(KEY_EDITOR_NAME) || 'Unknown';
   uiData._lastEdit = { name, time: now };
   localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
-  setSyncStatus('saving', 'info');
+  setSyncStatus('saving','info');
 
-  const callbackName = 'cb_save_' + Math.random().toString(36).substring(2);
-  window[callbackName] = function(response) {
-    try {
-      if (response && response.ok) {
-        setSyncStatus('saved', 'success');
-        loadData();
-      } else {
-        console.error('Save failed', response);
-        setSyncStatus('save-failed', 'danger');
-      }
-    } catch (e) {
-      console.error('Save parse error', e);
-      setSyncStatus('save-error', 'danger');
-    } finally {
-      delete window[callbackName];
-      script.remove();
+  try {
+    const payload = new URLSearchParams({
+      action: 'saveData',
+      data: JSON.stringify(uiData),
+      editor: name
+    });
+
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: {'Content-Type':'application/x-www-form-urlencoded'},
+      body: payload
+    });
+
+    if(!res.ok) throw new Error('Network response not OK');
+    const json = await res.json();
+    if(json.ok){
+      setSyncStatus('saved','success');
+      await loadData(); // refresh after saving
+    } else {
+      console.error('Save failed', json);
+      setSyncStatus('save-failed','danger');
     }
-  };
-
-  const payload = encodeURIComponent(JSON.stringify({
-    action: 'saveData',
-    data: uiData,
-    editor: name
-  }));
-
-  const script = document.createElement('script');
-  script.src = `${API_URL}?callback=${callbackName}&payload=${payload}&_=${Date.now()}`;
-  script.onerror = () => {
-    setSyncStatus('save-error', 'danger');
-    console.error('Save JSONP request failed');
-  };
-  document.body.appendChild(script);
+  } catch(err){
+    console.error('Save failed', err);
+    setSyncStatus('save-error','danger');
+  }
 }
+
 
 
 function minutesAgo(t){
@@ -314,6 +299,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 </body>
 </html>
+
 
 
 
