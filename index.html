@@ -102,14 +102,21 @@ const TEAMS=['Spades','Clubs','Hearts','Diamonds'];
 const KEY_UI_DATA='cit_ui_data',KEY_IS_EDITOR='cit_isEditor',KEY_EDITOR_NAME='cit_editorName';
 let currentTeam=TEAMS[0],uiData={},isEditor=localStorage.getItem(KEY_IS_EDITOR)==='true';
 
-const teamList=document.getElementById('teamList'),leaderboardBars=document.getElementById('leaderboardBars'),
-recordsBody=document.getElementById('recordsBody'),teamArea=document.getElementById('teamArea'),
-teamTitle=document.getElementById('teamTitle'),teamTotalEl=document.getElementById('teamTotal'),
-auditBody=document.getElementById('auditBody'),btnUnlock=document.getElementById('btnUnlock'),
-btnLogout=document.getElementById('btnLogout'),passModal=new bootstrap.Modal(document.getElementById('passcodeModal')),
-passForm=document.getElementById('passForm'),passInput=document.getElementById('passInput'),
-passMsg=document.getElementById('passMsg'),syncStatus=document.getElementById('syncStatus'),
-lastUpdatedEl=document.getElementById('lastUpdated');
+const teamList=document.getElementById('teamList'),
+      leaderboardBars=document.getElementById('leaderboardBars'),
+      recordsBody=document.getElementById('recordsBody'),
+      teamArea=document.getElementById('teamArea'),
+      teamTitle=document.getElementById('teamTitle'),
+      teamTotalEl=document.getElementById('teamTotal'),
+      auditBody=document.getElementById('auditBody'),
+      btnUnlock=document.getElementById('btnUnlock'),
+      btnLogout=document.getElementById('btnLogout'),
+      passModal=new bootstrap.Modal(document.getElementById('passcodeModal')),
+      passForm=document.getElementById('passForm'),
+      passInput=document.getElementById('passInput'),
+      passMsg=document.getElementById('passMsg'),
+      syncStatus=document.getElementById('syncStatus'),
+      lastUpdatedEl=document.getElementById('lastUpdated');
 
 function setSyncStatus(t,c='secondary'){
   syncStatus.textContent='sync: '+t;
@@ -117,7 +124,7 @@ function setSyncStatus(t,c='secondary'){
   lastUpdatedEl.textContent='Last updated: '+new Date().toLocaleTimeString();
 }
 
-// ----- Fetch Data -----
+// ---------------- Load Data ----------------
 async function loadData(){
   setSyncStatus('loading','warning');
   try {
@@ -129,7 +136,7 @@ async function loadData(){
       localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
       setSyncStatus('synced','success');
     } else {
-      console.error('Server error', json);
+      console.error('Server returned error', json);
       setSyncStatus('data-error','danger');
     }
   } catch(err){
@@ -140,32 +147,49 @@ async function loadData(){
   }
 }
 
-// ----- Save Data -----
-async function saveData(){
+// ---------------- Save Data (JSONP) ----------------
+async function saveData() {
   const now = new Date().toISOString();
   const name = localStorage.getItem(KEY_EDITOR_NAME) || 'Unknown';
   uiData._lastEdit = { name, time: now };
   localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
-  setSyncStatus('saving','info');
+  setSyncStatus('saving', 'info');
 
   try {
-    const res = await fetch(API_URL, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ action:'saveData', data:uiData, editor:name })
+    const payload = encodeURIComponent(JSON.stringify(uiData));
+    const callbackName = 'jsonpSaveCallback_' + Date.now();
+
+    const result = await new Promise((resolve, reject) => {
+      window[callbackName] = (res) => {
+        delete window[callbackName];
+        resolve(res);
+      };
+
+      const script = document.createElement('script');
+      script.src = `${API_URL}?action=saveData&data=${payload}&editor=${encodeURIComponent(name)}&callback=${callbackName}&_=${Date.now()}`;
+      script.onerror = () => {
+        delete window[callbackName];
+        reject(new Error('JSONP request failed'));
+      };
+      document.body.appendChild(script);
     });
-    if(!res.ok) throw new Error('Network response not OK');
-    const json = await res.json();
-    if(json.ok){ setSyncStatus('saved','success'); await loadData(); }
-    else{ setSyncStatus('save-failed','danger'); console.error(json); }
-  } catch(err){
+
+    if (result.ok) {
+      setSyncStatus('saved', 'success');
+      await loadData();
+    } else {
+      console.error('Save failed', result);
+      setSyncStatus('save-failed', 'danger');
+    }
+
+  } catch (err) {
     console.error('Save failed', err);
-    setSyncStatus('save-error','danger');
+    setSyncStatus('save-error', 'danger');
   }
 }
 
-// ----- Render Functions -----
-function minutesAgo(t){ return t ? (Date.now()-new Date(t).getTime())/60000 : Infinity; }
+// ---------------- Rendering ----------------
+function minutesAgo(t){ if(!t)return Infinity; return (Date.now()-new Date(t).getTime())/60000; }
 
 function renderLeaderboard(){
   leaderboardBars.innerHTML='';
@@ -178,7 +202,8 @@ function renderLeaderboard(){
     const color=v>=0?'success':'danger';
     const div=document.createElement('div');
     div.className='mb-2';
-    div.innerHTML=`<div class="d-flex justify-content-between"><div class="bar-label">${t}</div><div class="fw-bold">${v}</div></div>
+    div.innerHTML=`
+      <div class="d-flex justify-content-between"><div class="bar-label">${t}</div><div class="fw-bold">${v}</div></div>
       <div class="progress" style="height:18px;"><div class="progress-bar bg-${color}" style="width:${pct}%">${pct}%</div></div>`;
     const le=document.createElement('div');
     le.className='last-editor';
@@ -211,13 +236,16 @@ function renderTeamArea(){
   recordsBody.innerHTML='';
   logs.slice().reverse().forEach((l,i)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${l.timestamp}</td><td>${l.category}</td><td>${l.description}</td><td class="text-end">${l.points}</td>
-      <td>${isEditor?`<button class="btn btn-sm btn-outline-danger" data-i="${i}">Delete</button>`:''}</td>`;
+    tr.innerHTML=`<td>${l.timestamp}</td><td>${l.category}</td><td>${l.description}</td><td class="text-end">${l.points}</td><td>${isEditor?`<button class="btn btn-sm btn-outline-danger" data-i="${i}">Delete</button>`:''}</td>`;
     recordsBody.appendChild(tr);
   });
   if(isEditor){
-    recordsBody.querySelectorAll('button').forEach(b=>{
-      b.onclick=()=>{ const idx=b.dataset.i; if(confirm('Delete this record?')){ uiData[currentTeam].splice(logs.length-1-idx,1); saveData(); renderAll(); } };
+    recordsBody.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      const idx=b.dataset.i;
+      if(confirm('Delete this record?')){
+        uiData[currentTeam].splice(logs.length-1-idx,1);
+        saveData();renderAll();
+      }
     });
   }
 }
@@ -231,50 +259,58 @@ function renderAudit(){
   }));
 }
 
-function renderAll(){ renderTeamList(); renderLeaderboard(); renderTeamArea(); renderAudit(); }
+function renderAll(){renderTeamList();renderLeaderboard();renderTeamArea();renderAudit();}
 
-// ----- Event Listeners -----
-document.getElementById('addRecordForm').addEventListener('submit', e=>{
+// ---------------- Event Listeners ----------------
+document.getElementById('addRecordForm').addEventListener('submit',e=>{
   e.preventDefault();
-  if(!isEditor) return alert('Enter passcode to edit.');
-  const c=recordCategory.value, d=recordDesc.value.trim(), p=+recordPoints.value;
-  if(!d||isNaN(p)) return alert('Fill all fields.');
-  const entry={ category:c, description:d, points:p, timestamp:new Date().toLocaleString(), editor:localStorage.getItem(KEY_EDITOR_NAME)||'Editor' };
-  if(!uiData[currentTeam]) uiData[currentTeam]=[];
+  if(!isEditor)return alert('Enter passcode to edit.');
+  const c=recordCategory.value,d=recordDesc.value.trim(),p=+recordPoints.value;
+  if(!d||isNaN(p))return alert('Fill all fields.');
+  const entry={category:c,description:d,points:p,timestamp:new Date().toLocaleString(),editor:localStorage.getItem(KEY_EDITOR_NAME)||'Editor'};
+  if(!uiData[currentTeam])uiData[currentTeam]=[];
   uiData[currentTeam].push(entry);
-  saveData(); renderAll(); e.target.reset();
+  saveData();renderAll();e.target.reset();
 });
 
-btnUnlock.onclick=()=>{ passInput.value=''; passMsg.textContent=''; passModal.show(); };
-btnLogout.onclick=()=>{ isEditor=false; localStorage.removeItem(KEY_IS_EDITOR); updateEditorUI(); };
+btnUnlock.onclick=()=>{passInput.value='';passMsg.textContent='';passModal.show();};
+btnLogout.onclick=()=>{isEditor=false;localStorage.removeItem(KEY_IS_EDITOR);updateEditorUI();};
 
 passForm.onsubmit=async e=>{
   e.preventDefault();
   const pass=passInput.value.trim();
-  if(!pass) return passMsg.textContent='Enter passcode';
+  if(!pass)return passMsg.textContent='Enter passcode';
   try{
-    const res = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action:'checkPass', pass }) });
-    const j = await res.json();
-    if(j.ok){
-      let n = localStorage.getItem(KEY_EDITOR_NAME)||prompt('Editor name:','');
-      if(n) localStorage.setItem(KEY_EDITOR_NAME,n);
-      isEditor=true; localStorage.setItem(KEY_IS_EDITOR,'true'); passModal.hide(); updateEditorUI();
-    } else passMsg.textContent='Incorrect passcode.';
-  } catch(err){ passMsg.textContent='Connection failed: '+err.message; }
+    const r=await fetch(API_URL,{method:'POST',mode:'cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'checkPass',pass})});
+    const j=await r.json();
+    if(j&&j.ok){
+      let n=localStorage.getItem(KEY_EDITOR_NAME)||prompt('Editor name:','');
+      if(n)localStorage.setItem(KEY_EDITOR_NAME,n);
+      isEditor=true;localStorage.setItem(KEY_IS_EDITOR,'true');
+      passModal.hide();updateEditorUI();
+    }else passMsg.textContent='Incorrect passcode.';
+  }catch(err){passMsg.textContent='Connection failed: '+err.message;}
 };
 
 function updateEditorUI(){
   const f=addRecordForm;
-  if(isEditor){ btnUnlock.classList.add('d-none'); btnLogout.classList.remove('d-none'); f.querySelectorAll('input,select,button').forEach(e=>e.disabled=false); }
-  else{ btnUnlock.classList.remove('d-none'); btnLogout.classList.add('d-none'); f.querySelectorAll('input,select,button').forEach(e=>e.disabled=true); }
+  if(isEditor){
+    btnUnlock.classList.add('d-none');btnLogout.classList.remove('d-none');
+    f.querySelectorAll('input,select,button').forEach(e=>e.disabled=false);
+  } else {
+    btnUnlock.classList.remove('d-none');btnLogout.classList.add('d-none');
+    f.querySelectorAll('input,select,button').forEach(e=>e.disabled=true);
+  }
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{
+document.addEventListener('DOMContentLoaded',()=>{
   updateEditorUI();
   loadData();
-  if(!isEditor) setInterval(loadData,30000);
+  if(!isEditor)setInterval(loadData,30000);
 });
 </script>
+
 </body>
 </html>
+
 
