@@ -117,28 +117,20 @@ function setSyncStatus(t,c='secondary'){
   lastUpdatedEl.textContent='Last updated: '+new Date().toLocaleTimeString();
 }
 
-async function loadData(){
-  setSyncStatus('loading','warning');
-  try{
-    const r = await fetch(API_URL + '?action=getData&_=' + Date.now(), {
-      mode:'cors',
-      headers:{ 'Cache-Control':'no-cache' }
-    });
-    const text = await r.text();
-    const j = JSON.parse(text);
-    if(j && j.ok){
-      uiData = j.data || {};
-      localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
-      setSyncStatus('synced','success');
-    } else {
-      throw new Error('Invalid JSON or ok=false');
-    }
-  }catch(e){
-    console.error('loadData() failed:', e);
-    uiData = JSON.parse(localStorage.getItem(KEY_UI_DATA) || '{}');
-    setSyncStatus('offline','danger');
-  }
-  renderAll();
+if ((params.action || '').toLowerCase() === 'getdata') {
+  const props = PropertiesService.getScriptProperties();
+  const raw = props.getProperty(PROP_KEY_UI) || '{}';
+  const ver = Number(props.getProperty(PROP_KEY_VERSION) || 0);
+  const data = safeParseJSON(raw, {});
+  data._version = ver;
+
+  // JSONP Support
+  const callback = params.callback;
+  const response = JSON.stringify({ ok: true, data: data, version: ver });
+  const text = callback ? `${callback}(${response});` : response;
+
+  return ContentService.createTextOutput(text)
+    .setMimeType(callback ? ContentService.MimeType.JAVASCRIPT : ContentService.MimeType.JSON);
 }
 
 
@@ -279,3 +271,4 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 </body>
 </html>
+
