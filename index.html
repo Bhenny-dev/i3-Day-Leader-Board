@@ -124,66 +124,52 @@ function setSyncStatus(t,c='secondary'){
   lastUpdatedEl.textContent='Last updated: '+new Date().toLocaleTimeString();
 }
 
-// ----------------- JSONP Load -----------------
-function loadData() {
+// ----------------- Fetch Load -----------------
+async function loadData(){
   setSyncStatus('loading','warning');
-
-  const cbName = 'loadCallback_' + Date.now();
-  window[cbName] = function(res) {
-    delete window[cbName];
-    document.body.removeChild(script);
-    if(res.ok){
-      uiData = res.data || {};
-      localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
+  try{
+    const resp=await fetch(`${API_URL}?action=getData`,{method:'GET',mode:'cors',headers:{'Content-Type':'application/json'}});
+    const result=await resp.json();
+    if(result.ok){
+      uiData=result.data||{};
+      localStorage.setItem(KEY_UI_DATA,JSON.stringify(uiData));
       setSyncStatus('synced','success');
-    } else {
-      console.error('Load failed', res);
+    }else{
+      console.error('Load failed',result);
       setSyncStatus('load-error','danger');
     }
-    renderAll();
-  };
-
-  const script = document.createElement('script');
-  script.src = `${API_URL}?action=getData&callback=${cbName}&_=${Date.now()}`;
-  script.onerror = ()=>{
-    delete window[cbName];
-    document.body.removeChild(script);
-    console.error('JSONP request failed');
+  }catch(err){
+    console.error('Load error',err);
     setSyncStatus('load-error','danger');
-    renderAll();
-  };
-  document.body.appendChild(script);
+  }
+  renderAll();
 }
 
-// ----------------- JSONP Save -----------------
-function saveData() {
-  const now = new Date().toISOString();
-  const name = localStorage.getItem(KEY_EDITOR_NAME) || 'Unknown';
-  uiData._lastEdit = { name, time: now };
-  localStorage.setItem(KEY_UI_DATA, JSON.stringify(uiData));
+// ----------------- Fetch Save -----------------
+async function saveData(){
+  const now=new Date().toISOString();
+  const name=localStorage.getItem(KEY_EDITOR_NAME)||'Unknown';
+  uiData._lastEdit={name,time:now};
+  localStorage.setItem(KEY_UI_DATA,JSON.stringify(uiData));
   setSyncStatus('saving','info');
 
-  const script = document.createElement('script');
-const payload = encodeURIComponent(JSON.stringify(uiData));
-const cbName = 'saveCallback_' + Date.now();
-window[cbName] = function(res) {
-  delete window[cbName];
-  document.body.removeChild(script);
-  if(res.ok){ setSyncStatus('saved','success'); loadData(); }
-  else { setSyncStatus('save-error','danger'); console.error(res); }
-};
-script.src = `${API_URL}?action=saveData&data=${payload}&editor=${encodeURIComponent(name)}&callback=${cbName}`;
-script.onerror = () => {
-  delete window[cbName];
-  document.body.removeChild(script);
-  console.error('JSONP request failed');
-  setSyncStatus('save-error','danger');
-};
-document.body.appendChild(script);
+  try{
+    const resp=await fetch(API_URL,{
+      method:'POST',
+      mode:'cors',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ action:'saveData', data:uiData, editor:name })
+    });
+    const result=await resp.json();
+    if(result.ok){ setSyncStatus('saved','success'); loadData(); }
+    else{ setSyncStatus('save-error','danger'); console.error('Save failed',result); }
+  }catch(err){
+    setSyncStatus('save-error','danger');
+    console.error('Save error',err);
+  }
 }
 
-
-// ---------------- Rendering ----------------
+// ----------------- Rendering ----------------
 function minutesAgo(t){ if(!t)return Infinity; return (Date.now()-new Date(t).getTime())/60000; }
 
 function renderLeaderboard(){
@@ -276,7 +262,7 @@ passForm.onsubmit=async e=>{
   const pass=passInput.value.trim();
   if(!pass)return passMsg.textContent='Enter passcode';
   try{
-    const r=await fetch(API_URL,{method:'POST',mode:'cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'checkPass',pass})});
+    const r=await fetch(API_URL,{method:'POST',mode:'cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'checkPass',pass})});
     const j=await r.json();
     if(j&&j.ok){
       let n=localStorage.getItem(KEY_EDITOR_NAME)||prompt('Editor name:','');
@@ -304,10 +290,5 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(!isEditor)setInterval(loadData,30000);
 });
 </script>
-
 </body>
 </html>
-
-
-
-
